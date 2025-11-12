@@ -1,88 +1,151 @@
 // ===============================================
-// The Scream - User Input Interaction
+// The Scream - Interactive User Input (v0.2)
 // Author: Mjay (Myeonghee) Kim
-// Description: Basic class structure that moves a face
-//              using keyboard input (W, A, S, D / Arrows).
+// Description: Adds mouse-based charging and simple
+//              shockwave effects to the moving face.
 // ===============================================
 
-// Main class that controls the face movement and drawing
 class FaceGame {
-  constructor() {
-    // Start position near the middle of the screen
-    this.x = width * 0.5;
-    this.y = height * 0.65;
-
-    // Initial speed (x and y direction)
-    this.vx = 0;
-    this.vy = 0;
-
-    // Basic face size
-    this.size = 45;
+  constructor(){
+    this.reset();          // call reset at start
+    this.size = 80;        // face size (enlarged for visibility)
   }
 
-  // Update face position according to user input
-  update() {
-    let ax = 0, ay = 0;
-    const accel = 0.4; // movement acceleration
+  // Reset all values (used when restarting the scene)
+  reset(){
+    this.x = width * 0.5;  // starting X position (center)
+    this.y = height * 0.65;// starting Y position (slightly lower)
+    this.vx = 0;           // velocity X
+    this.vy = 0;           // velocity Y
+    this.charge = 0;       // charge level (0 to 1)
+    this.charging = false; // charging state (true while holding mouse)
+    this.waves = [];       // list of shockwave circles
+  }
 
-    // Move left or right (A or LEFT_ARROW / D or RIGHT_ARROW)
-    if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) ax -= accel;
-    if (keyIsDown(RIGHT_ARROW)|| keyIsDown(68)) ax += accel;
+  // Update movement, charge, and waves every frame
+  update(){
+    // --- 1. Movement (keyboard control) ---
+    let ax = 0, ay = 0; 
+    const accel = 0.45; // acceleration strength
 
-    // Move up or down (W or UP_ARROW / S or DOWN_ARROW)
-    if (keyIsDown(UP_ARROW)   || keyIsDown(87)) ay -= accel;
-    if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) ay += accel;
+    // Move using Arrow keys or WASD
+    if (keyIsDown(LEFT_ARROW)  || keyIsDown(65)) ax -= accel; // A or ←
+    if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) ax += accel; // D or →
+    if (keyIsDown(UP_ARROW)    || keyIsDown(87)) ay -= accel; // W or ↑
+    if (keyIsDown(DOWN_ARROW)  || keyIsDown(83)) ay += accel; // S or ↓
 
-    // Add acceleration to velocity (basic motion logic)
-    this.vx += ax; 
-    this.vy += ay;
+    // Add acceleration and apply simple friction
+    this.vx = (this.vx + ax) * 0.9;
+    this.vy = (this.vy + ay) * 0.9;
 
-    // Apply the new position, keeping it inside the canvas
+    // Limit maximum speed (prevents flying off too fast)
+    const maxSp = 5.5;
+    const sp = sqrt(this.vx * this.vx + this.vy * this.vy);
+    if (sp > maxSp){
+      this.vx = (this.vx / sp) * maxSp;
+      this.vy = (this.vy / sp) * maxSp;
+    }
+
+    // Apply movement and keep face inside canvas area
     this.x = constrain(this.x + this.vx, 0, width);
     this.y = constrain(this.y + this.vy, 0, height);
+
+    // --- 2. Charge system (mouse press builds energy) ---
+    if (this.charging) {
+      this.charge = min(1, this.charge + 0.015); // slowly increase charge
+    } else {
+      this.charge = max(0, this.charge - 0.02);  // slowly decrease charge
+    }
+
+    // --- 3. Shockwave update (circles fade out) ---
+    for (let i = this.waves.length - 1; i >= 0; i--) {
+      const w = this.waves[i];
+      w.r += 10 + w.power * 20; // grow in size
+      w.alpha -= 5;             // fade over time
+      if (w.alpha <= 0) this.waves.splice(i, 1); // remove invisible waves
+    }
   }
 
-  // Draw the moving face on top of the main sketch
-  overlayDraw() {
-    drawFace(this.x, this.y, this.size, 0); // charge=0 (static face, no color change)
+  // Create a new shockwave when the mouse is released
+  addWave(x, y){
+    this.waves.push({
+      x: x,
+      y: y,
+      r: 10,
+      alpha: 200,
+      power: this.charge  // store the current charge strength
+    });
+  }
+
+  // Draw all visual elements (waves + face)
+  overlayDraw(){
+    // Draw all current waves (expanding circles)
+    for (const w of this.waves){
+      noFill();
+      stroke(255, 150, 0, w.alpha);
+      strokeWeight(3);
+      circle(w.x, w.y, w.r * 2);
+    }
+
+    // Draw the main face with its charge-based color
+    drawFace(this.x, this.y, this.size, this.charge);
   }
 }
 
-// Global variable for the face game
+// Global variable to store the face game instance
 let game = null;
 
-// Initialize user input system
-function initUserInput() {
+// Initialize user input and create a new face
+function initUserInput(){
   game = new FaceGame();
 }
 
-// Called repeatedly to update and draw the overlay
-function overlayDraw() {
+// Continuously update and draw the overlay
+function overlayDraw(){
   if (!game) return;
   game.update();
   game.overlayDraw();
 }
 
-// Function to draw a simple "Scream" face
-function drawFace(x, y, s, charge) {
-  // Head base color
-  fill(255, 220, 180);
-  noStroke();
-  ellipse(x, y, s, s * 1.25); // head shape
+// Mouse interaction events
+function mousePressed(){
+  if (game) game.charging = true; // start charging when pressed
+}
+function mouseReleased(){
+  if (game){
+    game.charging = false;        // stop charging
+    game.addWave(mouseX, mouseY); // release energy as wave
+  }
+}
 
-  // Outline
-  stroke(50);
+// -----------------------------------------------
+// Draw the expressive face based on charge level
+// -----------------------------------------------
+function drawFace(x, y, s, charge){
+  // Face and mouth colors change with charge
+  const faceCol  = lerpColor(color(255,220,180), color(255,90,60), charge);
+  const mouthCol = lerpColor(color(255,140,0),   color(120,0,80),  charge);
+  const eyeCol   = color(0);
+
+  // Draw head
+  noStroke();
+  fill(faceCol);
+  ellipse(x, y, s, s * 1.25);
+
+  // Draw outline
   noFill();
+  stroke(50, 30, 30);
   strokeWeight(2.5);
   ellipse(x, y, s * 1.02, s * 1.27);
 
   // Eyes
   noStroke();
-  fill(0);
+  fill(eyeCol);
   ellipse(x - s * 0.18, y - s * 0.15, s * 0.18, s * 0.26);
   ellipse(x + s * 0.18, y - s * 0.15, s * 0.18, s * 0.26);
 
-  // Mouth (simple version, no dynamic charge yet)
-  fill(255, 140, 0);
-  ellipse(x, y + s * 0.18, s * 0.28, s * 0.25);
+  // Mouth reacts to charge (gets taller when energy increases)
+  fill(mouthCol);
+  const mouthH = map(charge, 0, 1, s * 0.25, s * 0.55);
+  ellipse(x, y + s * 0.18, s * 0.28, mouthH);
 }
