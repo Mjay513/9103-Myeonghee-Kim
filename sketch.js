@@ -11,7 +11,12 @@ function preload() {
 
 function setup() {
   // Create canvas
-  createCanvas(480, 600);
+    createCanvas(480, 600);
+
+  // Added to connect individual interaction code (userInput.js) with the group sketch. 
+  // This enables the face character and user input system to be initialised when setup() runs.
+  initUserInput();
+
   // Create save button
   let saveBtn = createButton('💾 Save your scream');
   saveBtn.position(10, 10); // Position
@@ -54,6 +59,11 @@ function draw() {
   
   drawStatusText();
   applyPixelation(10);
+
+  // Added for individual project:
+  // Calls the overlay layer from userInput.js to display the interactive face,
+  // shockwave effects, and user input system on top of the group project visuals.
+  overlayDraw();
 }
 
 function applyPixelation(pixelSize) {
